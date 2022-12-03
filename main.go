@@ -32,8 +32,13 @@ func cleanF() {
 		}
 		buf = append(buf, arr[i])
 	}
+	
+	var derp []byte
+	if derp, err = GetDerp(); err != nil {
+		log.Fatalln(err)
+	}
 
-	if err = os.WriteFile("chnroutes2/chnroutes.txt", bytes.Join(buf, []byte("\n")), 0666); err != nil {
+	if err = os.WriteFile("chnroutes2/chnroutes.txt", append(bytes.Join(buf, []byte("\n")), derp...), 0666); err != nil {
 		log.Fatalln(err)
 	}
 }
@@ -72,4 +77,42 @@ func getProjectFilename() []string {
 	}
 
 	return filenames
+}
+
+func GetDerp() ([]byte, error) {
+	resp, err := http.Get("https://login.tailscale.com/derpmap/default")
+	if err != nil {
+		return nil, err
+	}
+
+	var res Derp
+	if err = json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		return nil, err
+	}
+
+	buf := new(bytes.Buffer)
+	for _, v := range res.Regions {
+		for _, node := range v.Nodes {
+			buf.WriteString(node.IPv4)
+			buf.Write([]byte("/32\n"))
+		}
+	}
+	return buf.Bytes(), nil
+}
+
+type Derp struct {
+	Regions map[string]Region `json:"regions"`
+}
+
+type Region struct {
+	RegionID   int    `json:"RegionID"`
+	RegionCode string `json:"RegionCode"`
+	RegionName string `json:"RegionName"`
+	Nodes      []struct {
+		Name     string `json:"Name"`
+		RegionID int    `json:"RegionID"`
+		HostName string `json:"HostName"`
+		IPv4     string `json:"IPv4"`
+		IPv6     string `json:"IPv6"`
+	} `json:"Nodes"`
 }
